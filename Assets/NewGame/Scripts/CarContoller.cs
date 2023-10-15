@@ -1,61 +1,128 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class CarContoller : MonoBehaviour
+public class CarController : MonoBehaviour
 {
-    [SerializeField] private WheelCollider[] _wheelCollider;
-    [SerializeField] private Transform[] _wheelMesh;
+    public VehicleSound _vehicleSound;
+    public VehicleInputs _vehicleInputs;
+    public GameObject BrakeLight;
+    public Transform CernterofMass;
+    public Transform FrontLeftWheelMesh;
+    public Transform FrontRightWheelMesh;
+    public Transform RearLeftWheelMesh;
+    public Transform RearRightWheelMesh;
 
-    [SerializeField] private float _MotorSpeed = 2000f;
-    [SerializeField] private float _breakPower = 2000f;
+    public WheelCollider FrontLeftWheelCollider;
+    public WheelCollider FrontRightWheelCollider;
+    public WheelCollider RearLeftWheelCollider;
+    public WheelCollider RearRightWheelCollider;
 
-    private Quaternion _wheelColliderRotation;
-    private Vector3 _wheelColliderPosition;
+    public float maxSpeed = 50000f;
+    public float brakeForce = 8000f;
+    public float maxSteerAngle = 30f;
 
-    private float _inpX;
-    private float _inpZ;
+    private Rigidbody rb;
+    
+
+    private void Awake()
+    {
+        rb = GetComponent<Rigidbody>();
+        _vehicleSound = GetComponent<VehicleSound>();
+        _vehicleInputs = GetComponent<VehicleInputs>();
+    }
+    private void Start() {
+       rb.centerOfMass = CernterofMass.localPosition;
+    }
 
     private void Update()
     {
-        _inpX = Input.GetAxis("Horizontal");
-        _inpZ = Input.GetAxis("Vertical");
+        HandleEngineSound();
+        HandleBreakLight(_vehicleInputs.BrakeValue);
+        HandleBreakSound(_vehicleInputs.BrakeValue);
     }
-    private void FixedUpdate()
+
+    private void FixedUpdate() {
+        ApplyMotorTorque(_vehicleInputs.moveValue);
+        ApplyBrake(_vehicleInputs.BrakeValue);
+        UpdateAllWheelPositions();
+    }
+
+    public void ApplyMotorTorque(float input)
     {
-        WheelMovement();
+        RearLeftWheelCollider.motorTorque = input * maxSpeed * Time.fixedDeltaTime;
+        RearRightWheelCollider.motorTorque = input * maxSpeed * Time.fixedDeltaTime;
+        FrontLeftWheelCollider.motorTorque = input * maxSpeed * Time.fixedDeltaTime;
+        FrontRightWheelCollider.motorTorque = input * maxSpeed * Time.fixedDeltaTime;
     }
 
-    private void WheelMovement()
+
+    public void ApplyBrake(float input)
+    {        
+        RearLeftWheelCollider.brakeTorque = input * brakeForce;
+        RearRightWheelCollider.brakeTorque = input * brakeForce;
+        FrontLeftWheelCollider.brakeTorque = input * brakeForce;
+        FrontRightWheelCollider.brakeTorque = input * brakeForce;
+    }
+
+    public void ApplySteering(float input)
     {
-        // forword movement
-        _wheelCollider[2].motorTorque = _MotorSpeed * _inpZ;
-        _wheelCollider[3].motorTorque = _MotorSpeed * _inpZ;
-
-        // wheel trun
-        _wheelCollider[0].steerAngle = 30 * _inpX;
-        _wheelCollider[1].steerAngle = 30 * _inpX;
-
-        // getting and setting wheel positoin and rotation
-        for (int i = 0; i < 4; i++)
-        {
-            _wheelCollider[i].GetWorldPose(out _wheelColliderPosition, out _wheelColliderRotation);
-
-            _wheelMesh[i].transform.position = _wheelColliderPosition; _wheelMesh[i].transform.rotation = _wheelColliderRotation;
-        }
-
-        if (Input.GetKey(KeyCode.Space))
-        {
-            _wheelCollider[2].brakeTorque = _breakPower;
-            _wheelCollider[3].brakeTorque = _breakPower;
-        }
-        else
-        {
-            _wheelCollider[2].brakeTorque = 0;
-            _wheelCollider[3].brakeTorque = 0;
-        }
+        FrontLeftWheelCollider.steerAngle = input * maxSteerAngle;
+        FrontRightWheelCollider.steerAngle = input * maxSteerAngle;
     }
 
+    private void UpdateAllWheelPositions()
+    {
+        UpdateWheelPosition(FrontLeftWheelCollider, FrontLeftWheelMesh);
+        UpdateWheelPosition(FrontRightWheelCollider, FrontRightWheelMesh);
+        UpdateWheelPosition(RearLeftWheelCollider, RearLeftWheelMesh);
+        UpdateWheelPosition(RearRightWheelCollider, RearRightWheelMesh);
+        
+    }
+
+    private void UpdateWheelPosition(WheelCollider collider, Transform mesh)
+    {
+        Vector3 position;
+        Quaternion rotation;
+        collider.GetWorldPose(out position, out rotation);
+
+        mesh.position = position;
+        mesh.rotation = rotation;
+    }
+
+    private void HandleBreakLight(int input){
+        BrakeLight.SetActive(input == 1);
+    }
+    private void HandleBreakSound(int input){
+        if (input == 1)
+        {
+            _vehicleSound.PlayBrakeSound();
+        }
+    }
+    private void HandleEngineSound()
+    {
+        float desiredPitch = rb.velocity.magnitude / 2;
+
+        // Apply constraints
+        if (desiredPitch < 1f)
+        {
+            desiredPitch = 1f;
+        }
+        else if (desiredPitch > 3f)
+        {
+            desiredPitch = 3f;
+        }
+
+        // Set the pitch
+        _vehicleSound.EngineSound.pitch = desiredPitch;
+    }
+
+    public void ResetVehicle()
+    {
+        // Reset the position to a new Vector3 with the same x and z, and a higher y value.
+        transform.position = new Vector3(-6.6f, 0.71f, 47.5f);
+        
+        // Reset the rotation to identity (no rotation).
+        transform.rotation = Quaternion.Euler(0, 0, 0);
+    }
 
 }
